@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NPC Showcase</title>
+<meta name="theme-color" content="#1c1a24">
+<meta name="description" content="Browse every Selfie Social Society NPC: faces, outfits, accessories — live from the shared asset manifest.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="" class="brand-icon" width="36" height="36">
+    <div>
+      <h1>NPC Showcase</h1>
+      <p class="manifest-status" id="manifestStatus">Loading…</p>
+    </div>
+  </div>
+  <button id="refreshBtn" class="refresh-btn" aria-label="Refresh NPC data">⟳</button>
+</header>
+
+<main>
+  <section id="stage" class="stage" aria-live="polite">
+    <button id="prevBtn" class="nav-btn" aria-label="Previous NPC">‹</button>
+    <article class="npc-card" id="npcCard">
+      <h2 id="npcName">—</h2>
+      <p class="npc-role" id="npcRole">—</p>
+      <div class="art-row">
+        <figure class="art">
+          <button class="zoom-wrap" id="faceZoom" aria-label="Zoom face">
+            <img id="faceImg" alt="NPC face" crossorigin="anonymous">
+          </button>
+          <figcaption>Face</figcaption>
+        </figure>
+        <figure class="art">
+          <button class="zoom-wrap" id="outfitZoom" aria-label="Zoom outfit">
+            <img id="outfitImg" alt="NPC outfit" crossorigin="anonymous">
+          </button>
+          <figcaption>Outfit</figcaption>
+        </figure>
+      </div>
+      <p class="npc-notes" id="npcNotes"></p>
+      <p class="npc-accessory" id="npcAccessory"></p>
+    </article>
+    <button id="nextBtn" class="nav-btn" aria-label="Next NPC">›</button>
+  </section>
+
+  <nav class="thumb-strip" id="thumbStrip" aria-label="All NPCs"></nav>
+
+  <p class="counter" id="counter"></p>
+</main>
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">✕</button>
+  <img id="lightboxImg" alt="">
+  <p id="lightboxCaption"></p>
+</div>
+
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
