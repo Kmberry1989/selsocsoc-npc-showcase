@@ -45,6 +45,7 @@
       </div>
       <p class="npc-notes" id="npcNotes"></p>
       <p class="npc-accessory" id="npcAccessory"></p>
+      <button class="view3d-btn" id="view3dBtn" type="button">🔄 View in 3D</button>
     </article>
     <button id="nextBtn" class="nav-btn" aria-label="Next NPC">›</button>
   </section>
@@ -60,6 +61,19 @@
   <p id="lightboxCaption"></p>
 </div>
 
+<div class="viewer3d" id="viewer3d" hidden>
+  <div class="viewer3d-frame">
+    <button class="lightbox-close" id="viewer3dClose" aria-label="Close 3D view">✕</button>
+    <h2 id="viewer3dName">—</h2>
+    <canvas id="viewer3dCanvas"></canvas>
+    <p class="viewer3d-hint">Drag to spin</p>
+  </div>
+</div>
+
+<script type="module">
+import { showNPC, stopViewer } from './viewer3d.js';
+window.__npcViewer3D = { showNPC, stopViewer };
+</script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {

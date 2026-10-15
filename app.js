@@ -174,6 +174,19 @@
     renderCard();
   });
   $("refreshBtn").addEventListener("click", loadManifest);
+  $("view3dBtn").addEventListener("click", () => {
+    const npc = npcs[index];
+    if (!npc || !window.__npcViewer3D) return;
+    $("viewer3dName").textContent = npc.name || "NPC";
+    $("viewer3d").hidden = false;
+    window.__npcViewer3D.showNPC(npc, assetBase);
+  });
+  const closeViewer = () => {
+    $("viewer3d").hidden = true;
+    if (window.__npcViewer3D) window.__npcViewer3D.stopViewer();
+  };
+  $("viewer3dClose").addEventListener("click", closeViewer);
+  $("viewer3d").addEventListener("click", (e) => { if (e.target === $("viewer3d")) closeViewer(); });
   card.faceZoom.addEventListener("click", () => openLightbox(card.faceZoom.dataset.full, card.faceZoom.dataset.caption));
   card.outfitZoom.addEventListener("click", () => openLightbox(card.outfitZoom.dataset.full, card.outfitZoom.dataset.caption));
   $("lightboxClose").addEventListener("click", closeLightbox);
