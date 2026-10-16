@@ -252,15 +252,6 @@ export function showNPC(npc, assetBase) {
     h.position.set(0, npc.id === 'mayor-mayor' ? 1.78 : 1.76, 0);
     g.add(h);
   }
-  const hairId = (DEFAULT_LOADOUT[npc.id] || {}).hair;
-  if (hairId) {
-    const hdef = ACCESSORY_DEFS.find(d => d.id === hairId);
-    if (hdef) {
-      const hair = buildAccessory(hdef, THREE);
-      hair.position.set(0, 1.42, 0);
-      g.add(hair);
-    }
-  }
   if (npc.id === 'mayor-mayor') addCape(g);
   rig.add(g);
 }
