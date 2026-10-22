@@ -181,6 +181,68 @@
     $("viewer3d").hidden = false;
     window.__npcViewer3D.showNPC(npc, assetBase);
   });
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  // Character card PNG: name + role header, face medallion, and the
+  // FRONT slice of the wraparound outfit strip (u 0.375-0.625).
+  async function downloadCard() {
+    const npc = npcs[index];
+    if (!npc) return;
+    const W = 900, H = 1320;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const x = c.getContext("2d");
+    x.fillStyle = "#f7f2e8"; x.fillRect(0, 0, W, H);
+    x.fillStyle = "#1d2b22"; x.fillRect(0, 0, W, 170);
+    x.fillStyle = "#f7f2e8"; x.textAlign = "center";
+    x.font = "800 62px system-ui, sans-serif";
+    x.fillText(npc.name || "Unnamed", W / 2, 78);
+    x.font = "500 32px system-ui, sans-serif";
+    x.fillStyle = "#cfe0d2";
+    x.fillText(npc.role || "", W / 2, 128);
+    x.fillStyle = "#5c6861"; x.font = "600 24px system-ui, sans-serif";
+    x.fillText("Face", W / 2, 220);
+    const faceUrl = absUrl(npc.faceUrl);
+    if (faceUrl) {
+      try {
+        const img = await loadImage(faceUrl);
+        x.save();
+        x.beginPath(); x.arc(W / 2, 400, 175, 0, Math.PI * 2); x.clip();
+        const s = Math.max(350 / img.width, 350 / img.height);
+        x.drawImage(img, W / 2 - (img.width * s) / 2, 400 - (img.height * s) / 2, img.width * s, img.height * s);
+        x.restore();
+        x.strokeStyle = "#1d2b22"; x.lineWidth = 6;
+        x.beginPath(); x.arc(W / 2, 400, 175, 0, Math.PI * 2); x.stroke();
+      } catch { /* face stays blank if the image cannot load with CORS */ }
+    }
+    x.fillStyle = "#5c6861"; x.font = "600 24px system-ui, sans-serif";
+    x.fillText("Outfit — front", W / 2, 640);
+    const outfitUrl = absUrl(npc.outfitUrl);
+    if (outfitUrl) {
+      try {
+        const img = await loadImage(outfitUrl);
+        const fx = img.width * 0.375, fw = img.width * 0.25;
+        x.drawImage(img, fx, 0, fw, img.height, 310, 665, 280, 560);
+        x.strokeStyle = "#1d2b22"; x.lineWidth = 4;
+        x.strokeRect(310, 665, 280, 560);
+      } catch { /* outfit stays blank if the image cannot load with CORS */ }
+    }
+    x.fillStyle = "#5c6861"; x.font = "500 24px system-ui, sans-serif";
+    x.fillText("Selfie Social Society · Cyclical City", W / 2, 1280);
+    const a = document.createElement("a");
+    a.download = "npc-" + (npc.id || "card") + "-card.png";
+    a.href = c.toDataURL("image/png");
+    a.click();
+  }
+  $("cardBtn").addEventListener("click", downloadCard);
   const closeViewer = () => {
     $("viewer3d").hidden = true;
     if (window.__npcViewer3D) window.__npcViewer3D.stopViewer();
