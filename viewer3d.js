@@ -5,6 +5,7 @@
  */
 import * as THREE from './three.module.js';
 import { ACCESSORY_DEFS, DEFAULT_LOADOUT, buildAccessory } from './accessory-library.js';
+import { attachLivingFace } from './living-faces.js';
 
 const SKIN = {
   'mayor-mayor': 13209446, 'gideon': 11567710, 'lyla-lens': 12155224,
@@ -148,6 +149,7 @@ function addCane(g) {
 /* ---------- viewer ---------- */
 let renderer = null, scene = null, camera = null, rig = null, raf = 0;
 let dragging = false, lastX = 0, autoSpin = true;
+let living = null; // living-face handle for the shown NPC (mouth + blinking)
 
 function initViewer(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -194,6 +196,7 @@ function initViewer(canvas) {
 
   const tick = () => {
     if (autoSpin && rig) rig.rotation.y += 0.009;
+    if (living) living.update();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(tick);
   };
@@ -240,6 +243,9 @@ export function showNPC(npc, assetBase) {
       new THREE.MeshBasicMaterial({ map: loadTex(assetBase + npc.faceUrl), transparent: true }));
     face.position.set(0, 1.66, 0.079);
     g.add(face);
+    living = attachLivingFace(g, npc.id); // mouth + blinking, matching the game
+  } else {
+    living = null;
   }
   if (ACCESSORIES[npc.id]) {
     const a = ACCESSORIES[npc.id]();
@@ -258,5 +264,5 @@ export function showNPC(npc, assetBase) {
 
 export function stopViewer() {
   if (raf) cancelAnimationFrame(raf);
-  raf = 0; renderer = null; scene = null; rig = null;
+  raf = 0; renderer = null; scene = null; rig = null; living = null;
 }
