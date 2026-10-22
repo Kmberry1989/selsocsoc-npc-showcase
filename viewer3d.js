@@ -232,13 +232,13 @@ export function showNPC(npc, assetBase) {
   const head = new THREE.Mesh(
     new THREE.CylinderGeometry(0.34, 0.34, 0.15, 32),
     new THREE.MeshStandardMaterial({ color: skin, roughness: 0.7 }));
-  head.rotation.x = Math.PI/2; head.position.y = 1.42; head.castShadow = true; g.add(head);
+  head.rotation.x = Math.PI/2; head.position.y = 1.66; head.castShadow = true; g.add(head); // floats above the body, matching the game (was 1.42)
 
   if (npc.faceUrl) {
     const face = new THREE.Mesh(
       new THREE.CircleGeometry(0.30, 40),
       new THREE.MeshBasicMaterial({ map: loadTex(assetBase + npc.faceUrl), transparent: true }));
-    face.position.set(0, 1.42, 0.079);
+    face.position.set(0, 1.66, 0.079);
     g.add(face);
   }
   if (ACCESSORIES[npc.id]) {
@@ -249,7 +249,7 @@ export function showNPC(npc, assetBase) {
   if (npc.id === 'gideon') addCane(g);
   if (HATS[npc.id]) {
     const h = HATS[npc.id]();
-    h.position.set(0, npc.id === 'mayor-mayor' ? 1.78 : 1.76, 0);
+    h.position.set(0, npc.id === 'mayor-mayor' ? 2.02 : 2.00, 0); // hats follow the floated head (+0.24)
     g.add(h);
   }
   if (npc.id === 'mayor-mayor') addCape(g);
