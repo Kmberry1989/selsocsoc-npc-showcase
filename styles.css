@@ -114,7 +114,14 @@ main { flex: 1; padding: 16px; max-width: 860px; width: 100%; margin: 0 auto; }
   cursor: pointer;
   padding: 0;
 }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Face-thumb crop, same window as Render Studio: v2 face PNGs are
+   1600x1600 skin sheets with features only in a central band, so a
+   whole-sheet 64px thumb reads as a peach square. Showing the centre
+   75% window (x 0.125-0.875, y 0.145-0.895) keeps brows/eyes/mouth
+   (and Barnaby's moustache, Mr. Buck's monocle) prominent. Only
+   Bobby Gill's outermost beard/hair edges fall outside, and his face
+   still reads. The 220px card face view stays full-sheet by design. */
+.thumb img { width: 133.4%; height: 133.4%; max-width: none; object-fit: cover; display: block; margin: -19.3% 0 0 -16.7%; }
 .thumb.active { border-color: var(--accent); }
 .thumb .thumb-initial {
   width: 100%; height: 100%;

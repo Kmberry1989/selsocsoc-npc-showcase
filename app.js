@@ -102,8 +102,8 @@
     const outfitUrl = absUrl(npc.outfitUrl);
     if (outfitUrl) {
       restoreImg(card.outfitZoom, card.outfitImg);
-      card.outfitImg.src = outfitUrl;
       card.outfitImg.alt = (npc.name || "NPC") + " outfit";
+      setFrontOutfitTile(npc, outfitUrl);
       card.outfitZoom.dataset.full = outfitUrl;
       card.outfitZoom.dataset.caption = (npc.name || "") + " — outfit";
     } else {
@@ -191,8 +191,28 @@
     });
   }
 
+  // 2D card outfit tile: FRONT view only, cropped on canvas from the real
+  // wraparound outfit PNG — centre 30% of the strip (u 0.35-0.65, FRONT
+  // at u 0.5), full height, no repainting. The tile previously showed the
+  // whole wraparound sheet (front + back + sides squashed into the square
+  // tile), which is why dark back/side areas dominated. The full PNG is
+  // shown first and kept if the crop load fails (e.g. CORS), and the
+  // lightbox zoom still opens the full PNG.
+  function setFrontOutfitTile(npc, outfitUrl) {
+    card.outfitImg.src = outfitUrl;
+    loadImage(outfitUrl).then((img) => {
+      if (!npcs.length || npcs[index] !== npc) return;
+      const fx = Math.round(img.width * 0.35), fw = Math.round(img.width * 0.30);
+      if (!fw || !img.height) return;
+      const c = document.createElement("canvas");
+      c.width = fw; c.height = img.height;
+      c.getContext("2d").drawImage(img, fx, 0, fw, img.height, 0, 0, fw, img.height);
+      card.outfitImg.src = c.toDataURL("image/png");
+    }).catch(() => { /* keep the full PNG fallback */ });
+  }
+
   // Character card PNG: name + role header, face medallion, and the
-  // FRONT slice of the wraparound outfit strip (u 0.375-0.625).
+  // FRONT slice of the wraparound outfit strip (u 0.35-0.65).
   async function downloadCard() {
     const npc = npcs[index];
     if (!npc) return;
@@ -229,10 +249,10 @@
     if (outfitUrl) {
       try {
         const img = await loadImage(outfitUrl);
-        const fx = img.width * 0.375, fw = img.width * 0.25;
-        x.drawImage(img, fx, 0, fw, img.height, 310, 665, 280, 560);
+        const fx = img.width * 0.35, fw = img.width * 0.30;
+        x.drawImage(img, fx, 0, fw, img.height, 282, 665, 336, 560);
         x.strokeStyle = "#1d2b22"; x.lineWidth = 4;
-        x.strokeRect(310, 665, 280, 560);
+        x.strokeRect(282, 665, 336, 560);
       } catch { /* outfit stays blank if the image cannot load with CORS */ }
     }
     x.fillStyle = "#5c6861"; x.font = "500 24px system-ui, sans-serif";

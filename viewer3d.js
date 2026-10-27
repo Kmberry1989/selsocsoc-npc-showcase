@@ -1,10 +1,14 @@
 /* NPC Showcase — 3D viewer
  * Renders the selected NPC the way the game builds them:
  * outfit-textured capsule body + skin-tone coin head + painted face,
- * plus their signature accessory, hat, cape or cane.
+ * plus their signature accessory and hat as the real game GLBs
+ * (assets/accessories/, byte-identical copies of the game's
+ * assets/npc-accessories/*.glb), at the real roster anchors.
+ * No procedural accessory geometry remains here: a GLB that fails to
+ * load is left out, never replaced with a fake.
  */
 import * as THREE from './three.module.js';
-import { ACCESSORY_DEFS, DEFAULT_LOADOUT, buildAccessory } from './accessory-library.js';
+import { GLTFLoader } from './GLTFLoader.js';
 import { attachLivingFace } from './living-faces.js';
 
 const SKIN = {
@@ -15,139 +19,53 @@ const SKIN = {
   'stanley-stamp': 12946278, 'bobby-gill': 12092257,
 };
 
-function mat(color, roughness = 0.6) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05 });
-}
-function mesh(geo, material, x = 0, y = 0, z = 0) {
-  const m = new THREE.Mesh(geo, material);
-  m.position.set(x, y, z);
-  m.castShadow = true;
-  return m;
-}
-
-const ACCESSORIES = {
-  'mayor-mayor'() { const g = new THREE.Group();
-    const handle = mesh(new THREE.CylinderGeometry(0.022,0.026,0.42,10), mat(0x8a5a34), 0,0.1,0); handle.rotation.z = 0.5;
-    const head = mesh(new THREE.CylinderGeometry(0.055,0.055,0.16,14), mat(0x6e4526), 0.13,0.28,0); head.rotation.z = 0.5;
-    const b1 = mesh(new THREE.CylinderGeometry(0.058,0.058,0.02,14), mat(0xe4aa38,0.35), 0.1,0.245,0); b1.rotation.z = 0.5;
-    const b2 = mesh(new THREE.CylinderGeometry(0.058,0.058,0.02,14), mat(0xe4aa38,0.35), 0.16,0.315,0); b2.rotation.z = 0.5;
-    g.add(handle, head, b1, b2); return g; },
-  'gideon'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.CylinderGeometry(0.016,0.016,0.85,8), mat(0x8a6a4a,0.7), 0,0.32,0));
-    const s = new THREE.Shape(); s.moveTo(0,0); s.lineTo(0.34,0.09); s.lineTo(0,0.18); s.lineTo(0,0);
-    const flag = new THREE.Mesh(new THREE.ShapeGeometry(s), mat(0xb07a3f,0.7));
-    flag.position.set(0.016,0.58,0); flag.castShadow = true;
-    g.add(flag, mesh(new THREE.SphereGeometry(0.028,10,8), mat(0xe4aa38,0.4), 0,0.76,0)); return g; },
-  'barnaby-bargain'() { const g = new THREE.Group();
-    const c = mesh(new THREE.CylinderGeometry(0.085,0.085,0.028,24), mat(0xe4aa38,0.35)); c.rotation.x = Math.PI/2.4;
-    const r = mesh(new THREE.TorusGeometry(0.085,0.012,10,24), mat(0xc78f2a,0.4)); r.rotation.x = Math.PI/2.4;
-    g.add(c, r); g.position.y = 0.1; return g; },
-  'pip-parade'() { const g = new THREE.Group();
-    const b = mesh(new THREE.SphereGeometry(0.14,20,16), mat(0xe76854,0.45), 0,0.42,0); b.scale.y = 1.15;
-    const k = mesh(new THREE.ConeGeometry(0.03,0.05,10), mat(0xc74f3d), 0,0.26,0); k.rotation.x = Math.PI;
-    g.add(b, k, mesh(new THREE.CylinderGeometry(0.006,0.006,0.22,6), mat(0xf5f0e7,0.8), 0,0.14,0)); return g; },
-  'agnes-alley'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.SphereGeometry(0.11,20,16), mat(0xd9a7c7,0.85)));
-    g.add(mesh(new THREE.TorusGeometry(0.11,0.014,8,24), mat(0xc48fb5,0.85)));
-    const w2 = mesh(new THREE.TorusGeometry(0.11,0.014,8,24), mat(0xc48fb5,0.85));
-    w2.rotation.x = Math.PI/2; w2.rotation.y = 0.5; g.add(w2);
-    const t = mesh(new THREE.CylinderGeometry(0.008,0.008,0.2,6), mat(0xd9a7c7,0.85), 0.1,-0.12,0.03);
-    t.rotation.z = 0.7; g.add(t); g.position.y = 0.12; return g; },
-  'dottie-daly'() { const g = new THREE.Group();
-    const s = mesh(new THREE.CylinderGeometry(0.05,0.05,0.32,16), mat(0xf3e6cf,0.8)); s.rotation.z = Math.PI/2;
-    const b = mesh(new THREE.CylinderGeometry(0.056,0.056,0.05,16), mat(0xb4552d,0.6)); b.rotation.z = Math.PI/2;
-    g.add(s, b, mesh(new THREE.SphereGeometry(0.028,12,10), mat(0xe4aa38,0.4), 0,0.062,0));
-    g.position.y = 0.12; return g; },
-  'mr-buck-coinsworth'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.BoxGeometry(0.2,0.09,0.1), mat(0xe4aa38,0.3)));
-    g.add(mesh(new THREE.BoxGeometry(0.16,0.02,0.08), mat(0xf2c86f,0.25), 0,0.055,0));
-    g.position.y = 0.1; return g; },
-  'fern-bramble'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.CylinderGeometry(0.075,0.06,0.1,14), mat(0xb4552d,0.8), 0,-0.02,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.012,0.012,0.14,8), mat(0x5c8d65,0.8), 0,0.1,0));
-    g.add(mesh(new THREE.SphereGeometry(0.055,14,12), mat(0xe78bb0,0.6), 0,0.2,0));
-    const l = mesh(new THREE.SphereGeometry(0.035,10,8), mat(0x5c8d65,0.7), 0.045,0.12,0);
-    l.scale.set(1.4,0.5,0.7); g.add(l); g.position.y = 0.1; return g; },
-  'stanley-stamp'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.BoxGeometry(0.24,0.15,0.025), mat(0xfbf7ec,0.85)));
-    g.add(mesh(new THREE.BoxGeometry(0.24,0.07,0.028), mat(0xefe6d2,0.85), 0,0.035,0));
-    g.add(mesh(new THREE.BoxGeometry(0.045,0.05,0.03), mat(0x7fb3d5,0.7), 0.085,0.045,0));
-    g.rotation.x = -0.15; g.position.y = 0.12; return g; },
-  'bobby-gill'() { const g = new THREE.Group();
-    const rod = mesh(new THREE.CylinderGeometry(0.014,0.02,1.15,8), mat(0x8a6a4a,0.7), 0,0.45,0);
-    rod.rotation.z = 0.35; rod.rotation.x = -0.2;
-    const line = mesh(new THREE.CylinderGeometry(0.004,0.004,0.5,6), mat(0xf5f0e7,0.9), 0.28,0.72,-0.12);
-    line.rotation.z = 0.15;
-    g.add(rod, line, mesh(new THREE.SphereGeometry(0.035,12,10), mat(0xe76854,0.5), 0.32,0.48,-0.13));
-    return g; },
-  'lyla-lens'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.BoxGeometry(0.2,0.14,0.1), mat(0x3a3f44,0.5)));
-    const lens = mesh(new THREE.CylinderGeometry(0.05,0.055,0.08,14), mat(0x22262a,0.4), 0,0,0.08);
-    lens.rotation.x = Math.PI/2; g.add(lens);
-    g.add(mesh(new THREE.CylinderGeometry(0.02,0.02,0.02,10), mat(0x9fd4ff,0.3), 0,0,0.125));
-    g.position.y = 0.12; return g; },
-  'chip-chance'() { const g = new THREE.Group();
-    const d = mesh(new THREE.BoxGeometry(0.13,0.13,0.13), mat(0xf5f0e7,0.5));
-    d.rotation.set(0.4,0.5,0.2); g.add(d); g.position.y = 0.12; return g; },
-  'peggy-plank'() { const g = new THREE.Group();
-    const h = mesh(new THREE.CylinderGeometry(0.02,0.024,0.4,10), mat(0x8a5a34,0.6), 0,0.1,0); h.rotation.z = 0.4;
-    const hd = mesh(new THREE.BoxGeometry(0.2,0.09,0.09), mat(0x6b7280,0.45), 0.1,0.26,0); hd.rotation.z = 0.4;
-    g.add(h, hd); return g; },
+/* Real game accessory GLBs, keyed by NPC id. File names and slots
+ * come from the game's assets/npc-accessories/manifest.json and the
+ * manifest's accessoryGlb fields; anchors are the real roster slots
+ * (held (0.46, 0.64, 0.14), head (0, 1.93, 0)). GLBs carry no node
+ * transform, so they load at identity scale/orientation — the game
+ * states no accessory scale, so none is invented here. Their bounding
+ * sizes match the old procedural extents (e.g. tophat 0.72 wide,
+ * 0.58 tall), which corroborates the identity placement. */
+const HELD_GLB = {
+  'mayor-mayor': 'gavel.glb', 'gideon': 'flag.glb', 'lyla-lens': 'camera.glb',
+  'chip-chance': 'die.glb', 'barnaby-bargain': 'coin.glb', 'pip-parade': 'balloon.glb',
+  'agnes-alley': 'yarn.glb', 'dottie-daly': 'scroll.glb', 'peggy-plank': 'hammer.glb',
+  'mr-buck-coinsworth': 'goldbar.glb', 'fern-bramble': 'flower.glb',
+  'stanley-stamp': 'envelope.glb', 'bobby-gill': 'rod.glb',
 };
-
-const HATS = {
-  'mayor-mayor'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.CylinderGeometry(0.34,0.36,0.05,24), mat(0x1c1e22,0.5), 0,0.02,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.21,0.23,0.52,24), mat(0x1c1e22,0.5), 0,0.30,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.215,0.215,0.02,24), mat(0x24262c,0.5), 0,0.565,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.232,0.232,0.07,24), mat(0x8f1f2e,0.6), 0,0.10,0));
-    return g; },
-  'stanley-stamp'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.CylinderGeometry(0.20,0.22,0.12,20), mat(0x2e4a6b,0.7), 0,0.06,0));
-    const brim = mesh(new THREE.CylinderGeometry(0.30,0.30,0.025,20), mat(0x243c58,0.7), 0,0.01,0.10);
-    brim.scale.set(1,1,0.7); g.add(brim); return g; },
-  'bobby-gill'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.CylinderGeometry(0.17,0.20,0.14,18), mat(0x7a8b6f,0.8), 0,0.07,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.30,0.32,0.03,20), mat(0x6b7d61,0.8), 0,0,0));
-    return g; },
-  'fern-bramble'() { const g = new THREE.Group();
-    g.add(mesh(new THREE.SphereGeometry(0.18,18,12,0,Math.PI*2,0,Math.PI/2), mat(0xd9b96a,0.85), 0,0.02,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.34,0.36,0.025,22), mat(0xcfa856,0.85), 0,0.02,0));
-    return g; },
-  'gideon'() { const g = new THREE.Group();
-    const c = mesh(new THREE.SphereGeometry(0.20,18,12,0,Math.PI*2,0,Math.PI/2), mat(0xb07a3f,0.75), 0,0.03,0);
-    c.scale.set(1,0.75,1); g.add(c);
-    const brim = mesh(new THREE.CylinderGeometry(0.26,0.26,0.025,18), mat(0x9a6a35,0.75), 0,0.02,0.12);
-    brim.scale.set(1,1,0.55); g.add(brim); return g; },
+const HAT_GLB = {
+  'mayor-mayor': 'tophat.glb', 'gideon': 'tourcap.glb', 'fern-bramble': 'strawhat.glb',
+  'stanley-stamp': 'mailcap.glb', 'bobby-gill': 'buckethat.glb',
 };
-
-function addCape(g) {
-  const geo = new THREE.PlaneGeometry(0.8, 1.05, 10, 10);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i);
-    const t = (0.525 - y) / 1.05;
-    pos.setZ(i, -0.18*t*t - 0.06*Math.sin(x*9)*t);
-    pos.setX(i, x*(1 + 0.35*t));
+// GAP (real assets only): Gideon's cane and Mayor Mayor's cape are
+// real GLBs (cane.glb, cape.glb) but the game roster has no left
+// HeldItemSlot and no back slot, and no readable game code attaches
+// them — so they are left out here rather than placed at an invented
+// anchor. The Showcase's displayed accessory comes from the manifest
+// (Gideon: tour pennant flag; Mayor Mayor: ceremonial gavel), both of
+// which ARE shown, so nothing the card promises is missing here.
+const glbLoader = new GLTFLoader();
+const glbCache = new Map(); // file -> Promise<Group> (shared, cloned per use)
+function loadGLBScene(file, remoteBase) {
+  if (!glbCache.has(file)) {
+    const local = 'assets/accessories/' + file;
+    const remote = remoteBase ? remoteBase + 'assets/npc-accessories/' + file : null;
+    glbCache.set(file, new Promise((resolve, reject) => {
+      glbLoader.load(local, (gltf) => resolve(gltf.scene),
+        undefined,
+        () => {
+          if (remote) glbLoader.load(remote, (gltf) => resolve(gltf.scene), undefined, reject);
+          else reject(new Error('GLB load failed: ' + file));
+        });
+    }));
   }
-  geo.computeVertexNormals();
-  const cape = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-    color: 0x8f1f2e, roughness: 0.85, side: THREE.DoubleSide }));
-  cape.position.set(0, 0.62, -0.30); cape.castShadow = true; g.add(cape);
-  g.add(mesh(new THREE.SphereGeometry(0.035,12,10), mat(0xe4aa38,0.35), 0,1.12,0.28));
-}
-
-function addCane(g) {
-  const cane = new THREE.Group();
-  cane.add(mesh(new THREE.CylinderGeometry(0.018,0.022,0.95,10), mat(0x6e4526,0.55), 0,0.30,0));
-  cane.add(mesh(new THREE.TorusGeometry(0.07,0.018,10,20,Math.PI), mat(0x6e4526,0.55), -0.07,0.775,0));
-  cane.add(mesh(new THREE.SphereGeometry(0.024,10,8), mat(0xe4aa38,0.4), -0.14,0.775,0));
-  cane.position.set(-0.50, 0.25, 0.12); cane.rotation.z = 0.06;
-  g.add(cane);
+  return glbCache.get(file);
 }
 
 /* ---------- viewer ---------- */
 let renderer = null, scene = null, camera = null, rig = null, raf = 0;
+let viewGen = 0; // incremented per showNPC; stale async GLB loads are discarded
 let dragging = false, lastX = 0, autoSpin = true;
 let living = null; // living-face handle for the shown NPC (mouth + blinking)
 
@@ -260,18 +178,31 @@ export function showNPC(npc, assetBase) {
   } else {
     living = null;
   }
-  if (ACCESSORIES[npc.id]) {
-    const a = ACCESSORIES[npc.id]();
-    a.position.set(0.50, 0.72, 0.12);
-    g.add(a);
-  }
-  if (npc.id === 'gideon') addCane(g);
-  if (HATS[npc.id]) {
-    const h = HATS[npc.id]();
-    h.position.set(0, npc.id === 'mayor-mayor' ? 2.02 : 2.00, 0); // hats follow the floated head (+0.24)
-    g.add(h);
-  }
-  if (npc.id === 'mayor-mayor') addCape(g);
+  // Game anchors, ported from selsocsoc assets/npc-roster.js (roster
+  // builder tQ): HeldItemSlot is a child of the right HandSlot
+  // (0.46, 0.68, 0) at local (0, -0.04, 0.14), i.e. (0.46, 0.64, 0.14)
+  // in NPC-root coords; the game attaches props with slot.add(prop),
+  // so the prop group origin sits exactly on the slot. HeadAccessorySlot
+  // is a child of the Head group (y 1.66) at local (0, 0.27, 0), i.e.
+  // (0, 1.93, 0). Previous positions (0.50, 0.72, 0.12) and y 2.00/2.02
+  // were editor-invented.
+  // Real GLBs load asynchronously: attach only if this figure is still
+  // the current one (generation guard), so a slow load never lands on
+  // a different NPC. On load failure the item is left out (warned in
+  // console), never replaced with procedural geometry.
+  const gen = ++viewGen;
+  const attach = (file, pos) => {
+    if (!file) return;
+    loadGLBScene(file, assetBase).then((sceneRoot) => {
+      if (gen !== viewGen || !g.parent) return;
+      const inst = sceneRoot.clone(true);
+      inst.position.set(...pos);
+      inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      g.add(inst);
+    }).catch((err) => console.warn('Showcase: could not load accessory GLB', file, err));
+  };
+  attach(HELD_GLB[npc.id], [0.46, 0.64, 0.14]);
+  attach(HAT_GLB[npc.id], [0, 1.93, 0]);
   rig.add(g);
 }
 
