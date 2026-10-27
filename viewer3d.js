@@ -226,10 +226,23 @@ export function showNPC(npc, assetBase) {
   const outfitUrl = assetBase + (npc.outfitUrl || '');
   const ot = loadTex(outfitUrl);
   ot.wrapS = THREE.RepeatWrapping; ot.offset.x = 0.25;
+  const bodyMat = new THREE.MeshStandardMaterial({ map: ot, roughness: 0.85 });
   const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.29, 0.54, 8, 20),
-    new THREE.MeshStandardMaterial({ map: ot, roughness: 0.85 }));
+    new THREE.CapsuleGeometry(0.29, 0.54, 8, 20), bodyMat);
   body.position.y = 0.66; body.castShadow = true; g.add(body);
+  // Roster unification 2026-10-27: full roster figure (previously the
+  // 3D view omitted hands, feet and shoulders).
+  const shoulders = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.27, 0.27, 0.045, 22), bodyMat);
+  shoulders.rotation.x = Math.PI / 2; shoulders.position.y = 0.97; g.add(shoulders);
+  const skinMat = new THREE.MeshStandardMaterial({ color: SKIN[npc.id] ?? 0xc99a56, roughness: 0.7 });
+  for (const side of [-1, 1]) {
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skinMat);
+    hand.position.set(0.46 * side, 0.68, 0); hand.castShadow = true; g.add(hand);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.14, 0.42),
+      new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 }));
+    shoe.position.set(0.19 * side, 0.15, 0.045); g.add(shoe);
+  }
 
   const skin = SKIN[npc.id] ?? 0xc99a56;
   const head = new THREE.Mesh(
