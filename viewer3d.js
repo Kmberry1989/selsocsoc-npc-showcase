@@ -37,14 +37,25 @@ const HELD_GLB = {
 const HAT_GLB = {
   'mayor-mayor': 'tophat.glb', 'gideon': 'tourcap.glb', 'fern-bramble': 'strawhat.glb',
   'stanley-stamp': 'mailcap.glb', 'bobby-gill': 'buckethat.glb',
+  'lyla-lens': 'press-fedora.glb', 'chip-chance': 'showman-bowler.glb',
+  'barnaby-bargain': 'bargain-bowler.glb', 'pip-parade': 'confetti-crown.glb',
+  'agnes-alley': 'cat-ears.glb', 'dottie-daly': 'quest-beret.glb',
+  'peggy-plank': 'hardhat.glb', 'mr-buck-coinsworth': 'banker-bowler.glb',
 };
-// GAP (real assets only): Gideon's cane and Mayor Mayor's cape are
-// real GLBs (cane.glb, cape.glb) but the game roster has no left
-// HeldItemSlot and no back slot, and no readable game code attaches
-// them — so they are left out here rather than placed at an invented
-// anchor. The Showcase's displayed accessory comes from the manifest
-// (Gideon: tour pennant flag; Mayor Mayor: ceremonial gavel), both of
-// which ARE shown, so nothing the card promises is missing here.
+// User-directed 2026-10-28: cane and cape are back in. The game roster
+// has no left HeldItemSlot and no back slot, so these two use
+// user-approved placements instead of game anchors: cane mirrored from
+// the right held slot, cape hanging behind the body from the shoulders.
+// (Real GLBs, real geometry — only the placement is editorial.)
+const LEFT_GLB = { 'gideon': 'cane.glb', 'chip-chance': 'microphone.glb' };
+const BACK_GLB = {
+  'mayor-mayor': 'cape.glb', 'gideon': 'tour-backpack.glb', 'lyla-lens': 'press-satchel.glb',
+  'chip-chance': 'dice-pouch.glb', 'barnaby-bargain': 'merchant-satchel.glb',
+  'pip-parade': 'festival-banner.glb', 'agnes-alley': 'cat-carrier.glb',
+  'dottie-daly': 'quest-tube.glb', 'peggy-plank': 'tool-roll.glb',
+  'mr-buck-coinsworth': 'money-bag.glb', 'fern-bramble': 'seed-pack.glb',
+  'stanley-stamp': 'mailbag.glb', 'bobby-gill': 'creel.glb',
+};
 const glbLoader = new GLTFLoader();
 const glbCache = new Map(); // file -> Promise<Group> (shared, cloned per use)
 function loadGLBScene(file, remoteBase) {
@@ -203,6 +214,8 @@ export function showNPC(npc, assetBase) {
   };
   attach(HELD_GLB[npc.id], [0.46, 0.64, 0.14]);
   attach(HAT_GLB[npc.id], [0, 1.93, 0]);
+  attach(LEFT_GLB[npc.id], [-0.46, 0.64, 0.14]);
+  attach(BACK_GLB[npc.id], [0, 0.55, -0.31]);
   rig.add(g);
 }
 

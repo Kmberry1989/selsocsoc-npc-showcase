@@ -2,7 +2,7 @@
  * NPC Showcase and the Accessory Editor).
  * Gives the previewed NPC a real mouth and blinking eyes, matching the
  * game: the v2 face art leaves the mouth blank, so a canvas-drawn toon
- * mouth plane sits at the speaking-mouth anchor (face center - 0.135),
+ * mouth plane sits at the speaking-mouth anchor (face center - 0.175),
  * and skin-colored lid planes sweep over both eyes on a random timer.
  * The mouth gently breathes even at rest, so the preview never sits
  * frozen. Distance and interaction drivers from the game do not apply
@@ -16,10 +16,10 @@
  */
 import * as THREE from './three.module.js';
 
-const STATES = ['neutral', 'smile', 'laugh', 'grin', 'frown', 'surprise', 'smirk', 'ooh'];
+const STATES = ['neutral', 'smile', 'laugh', 'grin', 'frown', 'surprise', 'smirk', 'ooh', 'tongue', 'wink'];
 const FACE_Y = 1.66;
 const FACE_Z = 0.079;
-const MOUTH_DY = -0.135;
+const MOUTH_DY = -0.175;
 const MOUTH_Z = FACE_Z + 0.016;
 const LID_Z = FACE_Z + 0.008;
 const FACE_R = 0.30;
@@ -126,6 +126,26 @@ function drawState(state) {
     ctx.strokeStyle = INK;
     ctx.stroke();
   }
+  else if (state === 'tongue') {
+    arc(68, 50, 128, 108, 188, 50, 11);
+    ctx.beginPath();
+    ctx.moveTo(104, 74);
+    ctx.lineTo(152, 74);
+    ctx.quadraticCurveTo(152, 118, 128, 118);
+    ctx.quadraticCurveTo(104, 118, 104, 74);
+    ctx.closePath();
+    ctx.fillStyle = TONGUE;
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(128, 78);
+    ctx.lineTo(128, 110);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#c85a5e';
+    ctx.stroke();
+  } else if (state === 'wink') arc(78, 62, 140, 86, 188, 42, 11);
   return canvas;
 }
 
@@ -216,6 +236,10 @@ export function attachLivingFace(parent, npcId) {
             lid.visible = show;
             if (show) lid.scale.set(1, Math.max(openness, 0.02), 1);
           }
+        if (handle.state === 'wink' && lids[0]) {
+          lids[0].visible = true;
+          lids[0].scale.set(1, 1, 1);
+        }
         }
       }
     },
