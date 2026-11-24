@@ -1,7 +1,7 @@
 /* NPC Showcase service worker — caches the app shell only.
    NPC data and images always come live from the shared manifest,
    so new characters and asset revisions appear without an app update. */
-const CACHE = "npc-showcase-shell-v1";
+const CACHE = "npc-showcase-shell-v2";
 const SHELL = [
   "./",
   "index.html",
