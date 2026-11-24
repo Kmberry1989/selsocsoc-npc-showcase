@@ -77,6 +77,16 @@
     <p class="viewer3d-hint">Drag to spin</p>
     <div class="scale-panel" id="scalePanel">
       <div class="scale-chips" id="scaleChips"></div>
+      <div class="scale-chips" id="modeChips">
+        <button class="scale-chip active" type="button" data-mode="scale">Scale</button>
+        <button class="scale-chip" type="button" data-mode="move">Move</button>
+        <button class="scale-chip" type="button" data-mode="rotate">Rotate</button>
+      </div>
+      <div class="scale-chips" id="axisChips" hidden>
+        <button class="scale-chip" type="button" data-axis="0">X</button>
+        <button class="scale-chip active" type="button" data-axis="1">Y</button>
+        <button class="scale-chip" type="button" data-axis="2">Z</button>
+      </div>
       <div class="scale-row">
         <button class="scale-step" id="scaleDown" type="button" aria-label="Smaller">−</button>
         <input type="range" id="scaleSlider" min="0.25" max="2" step="0.05" value="1" aria-label="Accessory scale">
@@ -92,8 +102,8 @@
 </div>
 
 <script type="module">
-import { showNPC, stopViewer, getCurrentAccessories, setAccessoryScale, resetAccessoryScale, getScaleOverrides } from './viewer3d.js';
-window.__npcViewer3D = { showNPC, stopViewer, getCurrentAccessories, setAccessoryScale, resetAccessoryScale, getScaleOverrides };
+import { showNPC, stopViewer, getCurrentAccessories, setAccessoryScale, setAccessoryOffset, setAccessoryRotation, resetAccessoryTransform, getTransformOverrides, getScaleOverrides } from './viewer3d.js';
+window.__npcViewer3D = { showNPC, stopViewer, getCurrentAccessories, setAccessoryScale, setAccessoryOffset, setAccessoryRotation, resetAccessoryTransform, getTransformOverrides, getScaleOverrides };
 </script>
 <script src="app.js"></script>
 <script>

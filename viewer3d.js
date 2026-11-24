@@ -151,27 +151,48 @@ export function loadoutFor(npc, accessories) {
   return loadout;
 }
 
-/* Live rescaling: attached GLB instances by slot, the current NPC's
- * loadout, and scale overrides the user made in this session (keyed by
- * accessory id, so they survive cycling to the next NPC and back).
- * An override is only kept while it differs from the manifest scale. */
-let attached = new Map(); // slot -> { instance, entry }
+/* Live transforms: attached GLB instances by slot, the current NPC's
+ * loadout, and transform overrides the user made in this session (keyed
+ * by accessory id, so they survive cycling to the next NPC and back).
+ * An override is only kept while it differs from the manifest value. */
+let attached = new Map(); // slot -> { instance, entry, basePos }
 let currentLoadout = [];
 let currentNpcId = null;
 const scaleOverrides = new Map(); // accessory id -> scale
-const overrideMeta = new Map(); // accessory id -> { npc, slot, was }
+const offsetOverrides = new Map(); // accessory id -> [x, y, z] metres
+const rotationOverrides = new Map(); // accessory id -> [x, y, z] radians
+const overrideMeta = new Map(); // accessory id -> { npc, slot, wasScale, wasOffset, wasRotation }
 
+function noteMeta(entry, fields) {
+  overrideMeta.set(entry.id, {
+    ...(overrideMeta.get(entry.id) || {}), npc: currentNpcId, slot: entry.slot, ...fields,
+  });
+}
 function manifestScale(entry) {
   return typeof entry.scale === 'number' ? entry.scale : 1;
 }
+function manifestOffset(entry) {
+  return entry.offset ? [...entry.offset] : [0, 0, 0];
+}
+function manifestRotation(entry) {
+  return entry.rotation ? [...entry.rotation] : [0, 0, 0];
+}
 function currentScale(entry) {
   return scaleOverrides.get(entry.id) ?? manifestScale(entry);
+}
+function currentOffset(entry) {
+  return offsetOverrides.get(entry.id) ?? manifestOffset(entry);
+}
+function currentRotation(entry) {
+  return rotationOverrides.get(entry.id) ?? manifestRotation(entry);
 }
 
 export function getCurrentAccessories() {
   return currentLoadout.map((e) => ({
     id: e.id, name: e.name, slot: e.slot,
     scale: currentScale(e), manifestScale: manifestScale(e),
+    offset: currentOffset(e), manifestOffset: manifestOffset(e),
+    rotation: currentRotation(e), manifestRotation: manifestRotation(e),
   }));
 }
 
@@ -182,29 +203,73 @@ export function setAccessoryScale(slot, scale) {
   const was = manifestScale(entry);
   if (Math.abs(clamped - was) < 0.005) scaleOverrides.delete(entry.id);
   else scaleOverrides.set(entry.id, clamped);
-  overrideMeta.set(entry.id, { npc: currentNpcId, slot, was });
+  noteMeta(entry, { wasScale: was });
   const rec = attached.get(slot);
   if (rec) rec.instance.scale.setScalar(clamped);
   return clamped;
 }
 
-export function resetAccessoryScale(slot) {
+export function setAccessoryOffset(slot, axis, value) {
+  const entry = currentLoadout.find((e) => e.slot === slot);
+  if (!entry) return null;
+  const off = [...currentOffset(entry)];
+  off[axis] = Math.min(0.5, Math.max(-0.5, Math.round(value * 100) / 100));
+  const was = manifestOffset(entry);
+  if (off.every((v, i) => Math.abs(v - was[i]) < 0.005)) offsetOverrides.delete(entry.id);
+  else offsetOverrides.set(entry.id, off);
+  noteMeta(entry, { wasOffset: was });
+  const rec = attached.get(slot);
+  if (rec) rec.instance.position.set(rec.basePos[0] + off[0], rec.basePos[1] + off[1], rec.basePos[2] + off[2]);
+  return off[axis];
+}
+
+export function setAccessoryRotation(slot, axis, radians) {
+  const entry = currentLoadout.find((e) => e.slot === slot);
+  if (!entry) return null;
+  const rot = [...currentRotation(entry)];
+  rot[axis] = Math.min(Math.PI, Math.max(-Math.PI, Math.round(radians * 100) / 100));
+  const was = manifestRotation(entry);
+  if (rot.every((v, i) => Math.abs(v - was[i]) < 0.005)) rotationOverrides.delete(entry.id);
+  else rotationOverrides.set(entry.id, rot);
+  noteMeta(entry, { wasRotation: was });
+  const rec = attached.get(slot);
+  if (rec) rec.instance.rotation.set(rot[0], rot[1], rot[2]);
+  return rot[axis];
+}
+
+export function resetAccessoryTransform(slot) {
   const entry = currentLoadout.find((e) => e.slot === slot);
   if (!entry) return null;
   scaleOverrides.delete(entry.id);
+  offsetOverrides.delete(entry.id);
+  rotationOverrides.delete(entry.id);
   const rec = attached.get(slot);
-  if (rec) rec.instance.scale.setScalar(manifestScale(entry));
-  return manifestScale(entry);
+  if (rec) {
+    const off = manifestOffset(entry), rot = manifestRotation(entry);
+    rec.instance.scale.setScalar(manifestScale(entry));
+    rec.instance.position.set(rec.basePos[0] + off[0], rec.basePos[1] + off[1], rec.basePos[2] + off[2]);
+    rec.instance.rotation.set(rot[0], rot[1], rot[2]);
+  }
+  return { scale: manifestScale(entry), offset: manifestOffset(entry), rotation: manifestRotation(entry) };
 }
 
-/* Every scale the user changed this session, in manifest shape, so the
- * copied list says exactly what to change and where it came from. */
-export function getScaleOverrides() {
-  return [...scaleOverrides.entries()].map(([id, scale]) => {
+/* Every transform the user changed this session, in manifest shape, so
+ * the copied list says exactly what to change and where it came from.
+ * Only changed fields are included per accessory. */
+export function getTransformOverrides() {
+  const ids = new Set([
+    ...scaleOverrides.keys(), ...offsetOverrides.keys(), ...rotationOverrides.keys(),
+  ]);
+  return [...ids].map((id) => {
     const meta = overrideMeta.get(id) || {};
-    return { id, npc: meta.npc || null, slot: meta.slot || null, scale, was: meta.was ?? 1 };
+    const out = { id, npc: meta.npc || null, slot: meta.slot || null };
+    if (scaleOverrides.has(id)) { out.scale = scaleOverrides.get(id); out.wasScale = meta.wasScale ?? 1; }
+    if (offsetOverrides.has(id)) { out.offset = offsetOverrides.get(id); out.wasOffset = meta.wasOffset ?? [0, 0, 0]; }
+    if (rotationOverrides.has(id)) { out.rotation = rotationOverrides.get(id); out.wasRotation = meta.wasRotation ?? [0, 0, 0]; }
+    return out;
   }).sort((a, b) => String(a.npc).localeCompare(String(b.npc)) || a.id.localeCompare(b.id));
 }
+export const getScaleOverrides = getTransformOverrides;
 
 export function showNPC(npc, assetBase, accessories) {
   const canvas = document.getElementById('viewer3dCanvas');
@@ -268,13 +333,14 @@ export function showNPC(npc, assetBase, accessories) {
     loadGLBScene(entry.file, assetBase).then((sceneRoot) => {
       if (gen !== viewGen || !g.parent) return;
       const inst = sceneRoot.clone(true);
-      const off = entry.offset || [0, 0, 0];
+      const off = currentOffset(entry);
       inst.position.set(pos[0] + off[0], pos[1] + off[1], pos[2] + off[2]);
-      if (entry.rotation) inst.rotation.set(...entry.rotation);
-      // Session rescale override wins over the manifest scale.
+      const rot = currentRotation(entry);
+      inst.rotation.set(rot[0], rot[1], rot[2]);
+      // Session transform overrides win over the manifest values.
       inst.scale.setScalar(currentScale(entry));
       inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-      attached.set(entry.slot, { instance: inst, entry });
+      attached.set(entry.slot, { instance: inst, entry, basePos: [...pos] });
       g.add(inst);
     }).catch((err) => console.warn('Showcase: could not load accessory GLB', entry.file, err));
   };

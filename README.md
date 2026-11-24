@@ -28,9 +28,11 @@ live game files as fallback.
 
 Gallery + rescale: the 3D viewer has ‹ › buttons (and arrow keys) to cycle
 through all 14 NPCs without closing. Below the canvas, tap an accessory
-chip, then drag the slider (0.25×–2×) to resize that GLB live. Rescales
-are kept for the session across NPCs; Copy scales copies every change as
-manifest-shaped JSON (`[{ id, npc, slot, scale, was }]`) to paste back for
+chip, then pick Scale, Move, or Rotate — the slider (0.25×–2× for scale,
+±0.5 m for move, ±180° for rotate, X/Y/Z axis) adjusts that GLB live.
+Rescales and moves are kept for the session across NPCs; Copy scales
+copies every change as manifest-shaped JSON (`[{ id, npc, slot, scale,
+offset, rotation, was… }]`, only changed fields) to paste back for
 a manifest update.
 
 Tap ⟳ in the header to re-fetch the manifest any time.

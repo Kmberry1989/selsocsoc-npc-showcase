@@ -190,12 +190,19 @@
     renderCard();
   });
   $("refreshBtn").addEventListener("click", loadManifest);
-  // 3D viewer gallery + rescale panel. The viewer shows the NPC's real
+  // 3D viewer gallery + transform panel. The viewer shows the NPC's real
   // GLBs (local copies of the game's files, live game files as fallback);
-  // prev/next cycle NPCs without closing, and the scale panel resizes the
-  // selected accessory live. Overrides live in the viewer for the session
-  // and Copy scales exports them as manifest-shaped JSON to paste back.
+  // prev/next cycle NPCs without closing, and the panel scales, moves, or
+  // rotates the selected accessory live. Overrides live in the viewer for
+  // the session and Copy scales exports them as manifest-shaped JSON.
   let activeSlot = null;
+  let transformMode = 'scale'; // scale | move | rotate
+  let transformAxis = 1; // 0 X, 1 Y, 2 Z (move/rotate only)
+  const SLIDER_CFG = {
+    scale: { min: 0.25, max: 2, step: 0.05 },
+    move: { min: -0.5, max: 0.5, step: 0.01 },
+    rotate: { min: -180, max: 180, step: 5 },
+  };
   function viewer() { return window.__npcViewer3D; }
   function openViewerFor(i) {
     const npc = npcs[i];
@@ -225,21 +232,49 @@
     });
     selectSlot(activeSlot);
   }
+  function refreshSlider() {
+    const a = viewer().getCurrentAccessories().find((x) => x.slot === activeSlot);
+    if (!a) return;
+    const s = $("scaleSlider"), cfg = SLIDER_CFG[transformMode];
+    s.min = String(cfg.min); s.max = String(cfg.max); s.step = String(cfg.step);
+    if (transformMode === 'scale') {
+      s.value = String(a.scale);
+      $("scaleValue").textContent = a.scale.toFixed(2) + "×";
+    } else if (transformMode === 'move') {
+      const v = a.offset[transformAxis];
+      s.value = String(v);
+      $("scaleValue").textContent = (v >= 0 ? "+" : "") + v.toFixed(2) + " m";
+    } else {
+      const deg = Math.round(a.rotation[transformAxis] * 180 / Math.PI);
+      s.value = String(deg);
+      $("scaleValue").textContent = deg + "°";
+    }
+  }
   function selectSlot(slot) {
     activeSlot = slot;
     const a = viewer().getCurrentAccessories().find((x) => x.slot === slot);
     if (!a) return;
     [...$("scaleChips").children].forEach((c) => c.classList.toggle("active", c.dataset.slot === slot));
-    $("scaleSlider").value = String(a.scale);
-    $("scaleValue").textContent = a.scale.toFixed(2) + "×";
+    refreshSlider();
   }
-  function applyScale(scale) {
+  function applySlider(value) {
     if (!activeSlot) return;
-    const s = viewer().setAccessoryScale(activeSlot, scale);
-    if (s == null) return;
-    $("scaleSlider").value = String(s);
-    $("scaleValue").textContent = s.toFixed(2) + "×";
+    if (transformMode === 'scale') viewer().setAccessoryScale(activeSlot, value);
+    else if (transformMode === 'move') viewer().setAccessoryOffset(activeSlot, transformAxis, value);
+    else viewer().setAccessoryRotation(activeSlot, transformAxis, value * Math.PI / 180);
+    refreshSlider();
   }
+  [...$("modeChips").children].forEach((b) => b.addEventListener("click", () => {
+    transformMode = b.dataset.mode;
+    [...$("modeChips").children].forEach((c) => c.classList.toggle("active", c === b));
+    $("axisChips").hidden = transformMode === 'scale';
+    refreshSlider();
+  }));
+  [...$("axisChips").children].forEach((b) => b.addEventListener("click", () => {
+    transformAxis = Number(b.dataset.axis);
+    [...$("axisChips").children].forEach((c) => c.classList.toggle("active", c === b));
+    refreshSlider();
+  }));
   function flashBtn(btn, text) {
     const old = btn.textContent;
     btn.textContent = text;
@@ -252,17 +287,17 @@
   $("viewer3dNext").addEventListener("click", () => {
     if (npcs.length) openViewerFor((index + 1) % npcs.length);
   });
-  $("scaleSlider").addEventListener("input", (e) => applyScale(parseFloat(e.target.value)));
-  $("scaleDown").addEventListener("click", () => applyScale(parseFloat($("scaleSlider").value) - 0.05));
-  $("scaleUp").addEventListener("click", () => applyScale(parseFloat($("scaleSlider").value) + 0.05));
+  $("scaleSlider").addEventListener("input", (e) => applySlider(parseFloat(e.target.value)));
+  $("scaleDown").addEventListener("click", () => applySlider(parseFloat($("scaleSlider").value) - SLIDER_CFG[transformMode].step));
+  $("scaleUp").addEventListener("click", () => applySlider(parseFloat($("scaleSlider").value) + SLIDER_CFG[transformMode].step));
   $("scaleReset").addEventListener("click", () => {
     if (!activeSlot) return;
-    const s = viewer().resetAccessoryScale(activeSlot);
-    if (s != null) { $("scaleSlider").value = String(s); $("scaleValue").textContent = s.toFixed(2) + "×"; }
+    viewer().resetAccessoryTransform(activeSlot);
+    refreshSlider();
   });
   $("copyScalesBtn").addEventListener("click", async () => {
     const btn = $("copyScalesBtn");
-    const overrides = viewer().getScaleOverrides();
+    const overrides = viewer().getTransformOverrides();
     if (!overrides.length) { flashBtn(btn, "No changes yet"); return; }
     const text = JSON.stringify(overrides, null, 2);
     try {
