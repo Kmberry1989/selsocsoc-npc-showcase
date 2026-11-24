@@ -19,6 +19,7 @@
   let npcs = [];
   let index = 0;
   let assetBase = "";
+  let accessories = []; // accessories-manifest entries (npc + slot + GLB file)
 
   function setStatus(text, cls) {
     statusEl.textContent = text;
@@ -42,6 +43,21 @@
       assetBase = data.assetBase || "";
       npcs = Array.isArray(data.characters) ? data.characters : [];
       if (!npcs.length) throw new Error("empty manifest");
+      // Accessories manifest, live from the same asset base: every entry
+      // carries npc + slot + GLB file, so the 3D view's head / left-hand /
+      // back items come from the manifest, not from code. A failed fetch
+      // only loses those slots — the held item still comes from each
+      // NPC's own accessoryGlb, and nothing procedural is substituted.
+      try {
+        const accUrl = assetBase + "assets/npc-accessories/manifest.json?t=" + Date.now();
+        const accRes = await fetch(accUrl, { cache: "no-store" });
+        if (!accRes.ok) throw new Error("HTTP " + accRes.status);
+        const accData = await accRes.json();
+        accessories = Array.isArray(accData.accessories) ? accData.accessories : [];
+      } catch (accErr) {
+        accessories = [];
+        console.warn("Showcase: accessories manifest unavailable, 3D view shows held items only", accErr);
+      }
       index = 0;
       const ver = data.version != null ? " · v" + data.version : "";
       setStatus("Live manifest" + ver, "ok");
@@ -179,7 +195,7 @@
     if (!npc || !window.__npcViewer3D) return;
     $("viewer3dName").textContent = npc.name || "NPC";
     $("viewer3d").hidden = false;
-    window.__npcViewer3D.showNPC(npc, assetBase);
+    window.__npcViewer3D.showNPC(npc, assetBase, accessories);
   });
   function loadImage(url) {
     return new Promise((resolve, reject) => {

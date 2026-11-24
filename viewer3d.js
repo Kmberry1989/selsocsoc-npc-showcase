@@ -1,67 +1,43 @@
 /* NPC Showcase — 3D viewer
  * Renders the selected NPC the way the game builds them:
  * outfit-textured capsule body + skin-tone coin head + painted face,
- * plus their signature accessory and hat as the real game GLBs
- * (assets/accessories/, byte-identical copies of the game's
- * assets/npc-accessories/*.glb), at the real roster anchors.
- * No procedural accessory geometry remains here: a GLB that fails to
- * load is left out, never replaced with a fake.
+ * plus their accessories as the real game GLBs at the roster slot
+ * anchors. NOTHING about an accessory is hardcoded here: the held
+ * item comes from the NPC manifest's accessoryGlb, the head / left-hand
+ * / back items come from the accessories manifest (entries keyed by
+ * npc + slot), skin comes from the NPC manifest's skin field, and any
+ * per-item offset / rotation / scale comes from that accessories entry.
+ * A GLB that fails to load is left out, never replaced with a fake.
+ * The body/head/hands/shoes below are the game's roster figure itself
+ * (same capsule/coin construction as npc-roster.js), not accessories.
  */
 import * as THREE from './three.module.js';
 import { GLTFLoader } from './GLTFLoader.js';
 import { attachLivingFace } from './living-faces.js';
 
-const SKIN = {
-  'mayor-mayor': 13209446, 'gideon': 11567710, 'lyla-lens': 12155224,
-  'chip-chance': 10119242, 'barnaby-bargain': 13671024, 'pip-parade': 13142373,
-  'agnes-alley': 11171419, 'dottie-daly': 14724482, 'peggy-plank': 12024663,
-  'mr-buck-coinsworth': 14197369, 'fern-bramble': 9658950,
-  'stanley-stamp': 12946278, 'bobby-gill': 12092257,
+/* Roster slot anchors, ported from selsocsoc assets/npc-roster.js
+ * (roster builder tQ): HeldItemSlot is a child of the right HandSlot
+ * (0.46, 0.68, 0) at local (0, -0.04, 0.14), i.e. (0.46, 0.64, 0.14)
+ * in NPC-root coords; HeadAccessorySlot is a child of the Head group
+ * (y 1.66) at local (0, 0.27, 0), i.e. (0, 1.93, 0). The left-hand
+ * slot mirrors the right; the back slot sits behind the torso. */
+const SLOT_POS = {
+  hand: [0.46, 0.64, 0.14],
+  handL: [-0.46, 0.64, 0.14],
+  head: [0, 1.93, 0],
+  back: [0, 0.55, -0.31],
 };
+// Skin fallback, used only when a manifest entry has no skin field.
+// (The live NPC manifest now carries a skin for all 14 NPCs.)
+const FALLBACK_SKIN = 0xc99a56;
 
-/* Real game accessory GLBs, keyed by NPC id. File names and slots
- * come from the game's assets/npc-accessories/manifest.json and the
- * manifest's accessoryGlb fields; anchors are the real roster slots
- * (held (0.46, 0.64, 0.14), head (0, 1.93, 0)). GLBs carry no node
- * transform, so they load at identity scale/orientation — the game
- * states no accessory scale, so none is invented here. Their bounding
- * sizes match the old procedural extents (e.g. tophat 0.72 wide,
- * 0.58 tall), which corroborates the identity placement. */
-const HELD_GLB = {
-  'mayor-mayor': 'gavel.glb', 'gideon': 'flag.glb', 'lyla-lens': 'camera.glb',
-  'chip-chance': 'die.glb', 'barnaby-bargain': 'coin.glb', 'pip-parade': 'balloon.glb',
-  'agnes-alley': 'yarn.glb', 'dottie-daly': 'scroll.glb', 'peggy-plank': 'hammer.glb',
-  'mr-buck-coinsworth': 'goldbar.glb', 'fern-bramble': 'flower.glb',
-  'stanley-stamp': 'envelope.glb', 'bobby-gill': 'rod.glb',
-};
-const HAT_GLB = {
-  'mayor-mayor': 'tophat.glb', 'gideon': 'tourcap.glb', 'fern-bramble': 'strawhat.glb',
-  'stanley-stamp': 'mailcap.glb', 'bobby-gill': 'buckethat.glb',
-  'lyla-lens': 'press-fedora.glb', 'chip-chance': 'showman-bowler.glb',
-  'barnaby-bargain': 'bargain-bowler.glb', 'pip-parade': 'confetti-crown.glb',
-  'agnes-alley': 'cat-ears.glb', 'dottie-daly': 'quest-beret.glb',
-  'peggy-plank': 'hardhat.glb', 'mr-buck-coinsworth': 'banker-bowler.glb',
-};
-// User-directed 2026-10-28: cane and cape are back in. The game roster
-// has no left HeldItemSlot and no back slot, so these two use
-// user-approved placements instead of game anchors: cane mirrored from
-// the right held slot, cape hanging behind the body from the shoulders.
-// (Real GLBs, real geometry — only the placement is editorial.)
-const LEFT_GLB = { 'gideon': 'cane.glb', 'chip-chance': 'microphone.glb' };
-const BACK_GLB = {
-  'mayor-mayor': 'cape.glb', 'gideon': 'tour-backpack.glb', 'lyla-lens': 'press-satchel.glb',
-  'chip-chance': 'dice-pouch.glb', 'barnaby-bargain': 'merchant-satchel.glb',
-  'pip-parade': 'festival-banner.glb', 'agnes-alley': 'cat-carrier.glb',
-  'dottie-daly': 'quest-tube.glb', 'peggy-plank': 'tool-roll.glb',
-  'mr-buck-coinsworth': 'money-bag.glb', 'fern-bramble': 'seed-pack.glb',
-  'stanley-stamp': 'mailbag.glb', 'bobby-gill': 'creel.glb',
-};
 const glbLoader = new GLTFLoader();
-const glbCache = new Map(); // file -> Promise<Group> (shared, cloned per use)
-function loadGLBScene(file, remoteBase) {
+const glbCache = new Map(); // file path -> Promise<Group> (shared, cloned per use)
+function loadGLBScene(file, assetBase) {
   if (!glbCache.has(file)) {
-    const local = 'assets/accessories/' + file;
-    const remote = remoteBase ? remoteBase + 'assets/npc-accessories/' + file : null;
+    const base = file.split('/').pop();
+    const local = 'assets/accessories/' + base;
+    const remote = assetBase ? assetBase + file : null;
     glbCache.set(file, new Promise((resolve, reject) => {
       glbLoader.load(local, (gltf) => resolve(gltf.scene),
         undefined,
@@ -141,7 +117,38 @@ function loadTex(url) {
   return t;
 }
 
-export function showNPC(npc, assetBase) {
+/* Loadout for one NPC, derived entirely from the two live manifests:
+ *  - hand: the NPC manifest's accessoryGlb
+ *  - head / handL / back: accessories-manifest entries with npc === id
+ *    (hand entries there duplicate accessoryGlb, so they are skipped)
+ * Each entry carries file, slot, and optional offset / rotation / scale.
+ * Returns [{ file, slot, offset, rotation, scale }]. */
+export function loadoutFor(npc, accessories) {
+  const loadout = [];
+  const accList = accessories || [];
+  if (npc.accessoryGlb) {
+    // The accessories manifest carries the same hand item plus its
+    // offset / rotation / scale (e.g. the busker's guitar) — merge it in.
+    const handEntry = accList.find((a) => a.npc === npc.id && a.slot === 'hand');
+    loadout.push({
+      file: npc.accessoryGlb, slot: 'hand',
+      offset: handEntry?.offset || null, rotation: handEntry?.rotation || null,
+      scale: typeof handEntry?.scale === 'number' ? handEntry.scale : null,
+    });
+  }
+  for (const a of accessories || []) {
+    if (a.npc === npc.id && a.slot && a.slot !== 'hand' && a.file) {
+      loadout.push({
+        file: a.file, slot: a.slot,
+        offset: a.offset || null, rotation: a.rotation || null,
+        scale: typeof a.scale === 'number' ? a.scale : null,
+      });
+    }
+  }
+  return loadout;
+}
+
+export function showNPC(npc, assetBase, accessories) {
   const canvas = document.getElementById('viewer3dCanvas');
   if (!renderer) initViewer(canvas);
   while (rig.children.length) {
@@ -164,7 +171,8 @@ export function showNPC(npc, assetBase) {
   const shoulders = new THREE.Mesh(
     new THREE.CylinderGeometry(0.27, 0.27, 0.045, 22), bodyMat);
   shoulders.rotation.x = Math.PI / 2; shoulders.position.y = 0.97; g.add(shoulders);
-  const skinMat = new THREE.MeshStandardMaterial({ color: SKIN[npc.id] ?? 0xc99a56, roughness: 0.7 });
+  const skin = npc.skin || FALLBACK_SKIN;
+  const skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.7 });
   for (const side of [-1, 1]) {
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skinMat);
     hand.position.set(0.46 * side, 0.68, 0); hand.castShadow = true; g.add(hand);
@@ -173,7 +181,6 @@ export function showNPC(npc, assetBase) {
     shoe.position.set(0.19 * side, 0.15, 0.045); g.add(shoe);
   }
 
-  const skin = SKIN[npc.id] ?? 0xc99a56;
   const head = new THREE.Mesh(
     new THREE.CylinderGeometry(0.34, 0.34, 0.15, 32),
     new THREE.MeshStandardMaterial({ color: skin, roughness: 0.7 }));
@@ -189,33 +196,26 @@ export function showNPC(npc, assetBase) {
   } else {
     living = null;
   }
-  // Game anchors, ported from selsocsoc assets/npc-roster.js (roster
-  // builder tQ): HeldItemSlot is a child of the right HandSlot
-  // (0.46, 0.68, 0) at local (0, -0.04, 0.14), i.e. (0.46, 0.64, 0.14)
-  // in NPC-root coords; the game attaches props with slot.add(prop),
-  // so the prop group origin sits exactly on the slot. HeadAccessorySlot
-  // is a child of the Head group (y 1.66) at local (0, 0.27, 0), i.e.
-  // (0, 1.93, 0). Previous positions (0.50, 0.72, 0.12) and y 2.00/2.02
-  // were editor-invented.
   // Real GLBs load asynchronously: attach only if this figure is still
   // the current one (generation guard), so a slow load never lands on
   // a different NPC. On load failure the item is left out (warned in
   // console), never replaced with procedural geometry.
   const gen = ++viewGen;
-  const attach = (file, pos) => {
-    if (!file) return;
-    loadGLBScene(file, assetBase).then((sceneRoot) => {
+  const attach = (entry) => {
+    const pos = SLOT_POS[entry.slot];
+    if (!entry.file || !pos) return;
+    loadGLBScene(entry.file, assetBase).then((sceneRoot) => {
       if (gen !== viewGen || !g.parent) return;
       const inst = sceneRoot.clone(true);
-      inst.position.set(...pos);
+      const off = entry.offset || [0, 0, 0];
+      inst.position.set(pos[0] + off[0], pos[1] + off[1], pos[2] + off[2]);
+      if (entry.rotation) inst.rotation.set(...entry.rotation);
+      if (typeof entry.scale === 'number') inst.scale.setScalar(entry.scale);
       inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       g.add(inst);
-    }).catch((err) => console.warn('Showcase: could not load accessory GLB', file, err));
+    }).catch((err) => console.warn('Showcase: could not load accessory GLB', entry.file, err));
   };
-  attach(HELD_GLB[npc.id], [0.46, 0.64, 0.14]);
-  attach(HAT_GLB[npc.id], [0, 1.93, 0]);
-  attach(LEFT_GLB[npc.id], [-0.46, 0.64, 0.14]);
-  attach(BACK_GLB[npc.id], [0, 0.55, -0.31]);
+  for (const entry of loadoutFor(npc, accessories)) attach(entry);
   rig.add(g);
 }
 

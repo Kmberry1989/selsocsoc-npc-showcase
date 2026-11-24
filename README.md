@@ -9,9 +9,22 @@ The app fetches the shared NPC asset manifest **live on every open**
 
 `https://raw.githubusercontent.com/Kmberry1989/selsocsoc/main/assets/npc/manifest.json`
 
+It also fetches the accessories manifest live from the same asset base:
+
+`https://raw.githubusercontent.com/Kmberry1989/selsocsoc/main/assets/npc-accessories/manifest.json`
+
 New characters and asset revisions appear automatically — no redeploy needed.
 NPC art images also load live from the manifest's URLs; the service worker
 deliberately never caches them.
+
+The 3D view is fully manifest-driven: skin and the held item come from each
+NPC's manifest entry, head / left-hand / back items come from accessories
+entries keyed by npc + slot, and per-item offsets come from those entries.
+No accessory is hardcoded in the viewer, and there is no procedural
+accessory fallback — a GLB that fails to load is left out. The local
+`assets/accessories/` GLBs are byte-identical copies of the game's
+`assets/npc-accessories/*.glb`, kept as the first-load source with the
+live game files as fallback.
 
 Tap ⟳ in the header to re-fetch the manifest any time.
 
