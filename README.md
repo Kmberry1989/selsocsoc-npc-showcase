@@ -26,6 +26,13 @@ accessory fallback — a GLB that fails to load is left out. The local
 `assets/npc-accessories/*.glb`, kept as the first-load source with the
 live game files as fallback.
 
+Gallery + rescale: the 3D viewer has ‹ › buttons (and arrow keys) to cycle
+through all 14 NPCs without closing. Below the canvas, tap an accessory
+chip, then drag the slider (0.25×–2×) to resize that GLB live. Rescales
+are kept for the session across NPCs; Copy scales copies every change as
+manifest-shaped JSON (`[{ id, npc, slot, scale, was }]`) to paste back for
+a manifest update.
+
 Tap ⟳ in the header to re-fetch the manifest any time.
 
 ## Installable (PWA)

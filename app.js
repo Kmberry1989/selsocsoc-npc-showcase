@@ -190,12 +190,89 @@
     renderCard();
   });
   $("refreshBtn").addEventListener("click", loadManifest);
-  $("view3dBtn").addEventListener("click", () => {
-    const npc = npcs[index];
-    if (!npc || !window.__npcViewer3D) return;
+  // 3D viewer gallery + rescale panel. The viewer shows the NPC's real
+  // GLBs (local copies of the game's files, live game files as fallback);
+  // prev/next cycle NPCs without closing, and the scale panel resizes the
+  // selected accessory live. Overrides live in the viewer for the session
+  // and Copy scales exports them as manifest-shaped JSON to paste back.
+  let activeSlot = null;
+  function viewer() { return window.__npcViewer3D; }
+  function openViewerFor(i) {
+    const npc = npcs[i];
+    if (!npc || !viewer()) return;
+    index = i;
+    renderCard();
     $("viewer3dName").textContent = npc.name || "NPC";
+    $("viewer3dCounter").textContent = (i + 1) + " / " + npcs.length;
     $("viewer3d").hidden = false;
-    window.__npcViewer3D.showNPC(npc, assetBase, accessories);
+    viewer().showNPC(npc, assetBase, accessories);
+    buildScalePanel();
+  }
+  function buildScalePanel() {
+    const list = viewer().getCurrentAccessories();
+    const chips = $("scaleChips");
+    chips.innerHTML = "";
+    if (!list.length) { activeSlot = null; return; }
+    if (!list.some((a) => a.slot === activeSlot)) activeSlot = list[0].slot;
+    list.forEach((a) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "scale-chip" + (a.slot === activeSlot ? " active" : "");
+      b.dataset.slot = a.slot;
+      b.textContent = a.name;
+      b.addEventListener("click", () => selectSlot(a.slot));
+      chips.appendChild(b);
+    });
+    selectSlot(activeSlot);
+  }
+  function selectSlot(slot) {
+    activeSlot = slot;
+    const a = viewer().getCurrentAccessories().find((x) => x.slot === slot);
+    if (!a) return;
+    [...$("scaleChips").children].forEach((c) => c.classList.toggle("active", c.dataset.slot === slot));
+    $("scaleSlider").value = String(a.scale);
+    $("scaleValue").textContent = a.scale.toFixed(2) + "×";
+  }
+  function applyScale(scale) {
+    if (!activeSlot) return;
+    const s = viewer().setAccessoryScale(activeSlot, scale);
+    if (s == null) return;
+    $("scaleSlider").value = String(s);
+    $("scaleValue").textContent = s.toFixed(2) + "×";
+  }
+  function flashBtn(btn, text) {
+    const old = btn.textContent;
+    btn.textContent = text;
+    setTimeout(() => { btn.textContent = old; }, 1600);
+  }
+  $("view3dBtn").addEventListener("click", () => openViewerFor(index));
+  $("viewer3dPrev").addEventListener("click", () => {
+    if (npcs.length) openViewerFor((index - 1 + npcs.length) % npcs.length);
+  });
+  $("viewer3dNext").addEventListener("click", () => {
+    if (npcs.length) openViewerFor((index + 1) % npcs.length);
+  });
+  $("scaleSlider").addEventListener("input", (e) => applyScale(parseFloat(e.target.value)));
+  $("scaleDown").addEventListener("click", () => applyScale(parseFloat($("scaleSlider").value) - 0.05));
+  $("scaleUp").addEventListener("click", () => applyScale(parseFloat($("scaleSlider").value) + 0.05));
+  $("scaleReset").addEventListener("click", () => {
+    if (!activeSlot) return;
+    const s = viewer().resetAccessoryScale(activeSlot);
+    if (s != null) { $("scaleSlider").value = String(s); $("scaleValue").textContent = s.toFixed(2) + "×"; }
+  });
+  $("copyScalesBtn").addEventListener("click", async () => {
+    const btn = $("copyScalesBtn");
+    const overrides = viewer().getScaleOverrides();
+    if (!overrides.length) { flashBtn(btn, "No changes yet"); return; }
+    const text = JSON.stringify(overrides, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove();
+    }
+    flashBtn(btn, "Copied");
   });
   function loadImage(url) {
     return new Promise((resolve, reject) => {
@@ -291,8 +368,10 @@
   lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
   document.addEventListener("keydown", (e) => {
     if (!lightbox.hidden && e.key === "Escape") closeLightbox();
-    if (lightbox.hidden && e.key === "ArrowLeft") $("prevBtn").click();
-    if (lightbox.hidden && e.key === "ArrowRight") $("nextBtn").click();
+    if (lightbox.hidden && !$("viewer3d").hidden && e.key === "ArrowLeft") $("viewer3dPrev").click();
+    else if (lightbox.hidden && !$("viewer3d").hidden && e.key === "ArrowRight") $("viewer3dNext").click();
+    else if (lightbox.hidden && e.key === "ArrowLeft") $("prevBtn").click();
+    else if (lightbox.hidden && e.key === "ArrowRight") $("nextBtn").click();
   });
 
   // Touch swipe on the card

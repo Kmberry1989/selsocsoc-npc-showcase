@@ -121,8 +121,8 @@ function loadTex(url) {
  *  - hand: the NPC manifest's accessoryGlb
  *  - head / handL / back: accessories-manifest entries with npc === id
  *    (hand entries there duplicate accessoryGlb, so they are skipped)
- * Each entry carries file, slot, and optional offset / rotation / scale.
- * Returns [{ file, slot, offset, rotation, scale }]. */
+ * Each entry carries id, name, file, slot, and optional offset /
+ * rotation / scale. Returns [{ id, name, file, slot, offset, rotation, scale }]. */
 export function loadoutFor(npc, accessories) {
   const loadout = [];
   const accList = accessories || [];
@@ -130,7 +130,9 @@ export function loadoutFor(npc, accessories) {
     // The accessories manifest carries the same hand item plus its
     // offset / rotation / scale (e.g. the busker's guitar) — merge it in.
     const handEntry = accList.find((a) => a.npc === npc.id && a.slot === 'hand');
+    const base = npc.accessoryGlb.split('/').pop().replace(/\.glb$/i, '');
     loadout.push({
+      id: handEntry?.id || base, name: handEntry?.name || npc.accessory || base,
       file: npc.accessoryGlb, slot: 'hand',
       offset: handEntry?.offset || null, rotation: handEntry?.rotation || null,
       scale: typeof handEntry?.scale === 'number' ? handEntry.scale : null,
@@ -139,6 +141,7 @@ export function loadoutFor(npc, accessories) {
   for (const a of accessories || []) {
     if (a.npc === npc.id && a.slot && a.slot !== 'hand' && a.file) {
       loadout.push({
+        id: a.id, name: a.name || a.id,
         file: a.file, slot: a.slot,
         offset: a.offset || null, rotation: a.rotation || null,
         scale: typeof a.scale === 'number' ? a.scale : null,
@@ -148,6 +151,61 @@ export function loadoutFor(npc, accessories) {
   return loadout;
 }
 
+/* Live rescaling: attached GLB instances by slot, the current NPC's
+ * loadout, and scale overrides the user made in this session (keyed by
+ * accessory id, so they survive cycling to the next NPC and back).
+ * An override is only kept while it differs from the manifest scale. */
+let attached = new Map(); // slot -> { instance, entry }
+let currentLoadout = [];
+let currentNpcId = null;
+const scaleOverrides = new Map(); // accessory id -> scale
+const overrideMeta = new Map(); // accessory id -> { npc, slot, was }
+
+function manifestScale(entry) {
+  return typeof entry.scale === 'number' ? entry.scale : 1;
+}
+function currentScale(entry) {
+  return scaleOverrides.get(entry.id) ?? manifestScale(entry);
+}
+
+export function getCurrentAccessories() {
+  return currentLoadout.map((e) => ({
+    id: e.id, name: e.name, slot: e.slot,
+    scale: currentScale(e), manifestScale: manifestScale(e),
+  }));
+}
+
+export function setAccessoryScale(slot, scale) {
+  const entry = currentLoadout.find((e) => e.slot === slot);
+  if (!entry) return null;
+  const clamped = Math.min(2, Math.max(0.25, Math.round(scale * 100) / 100));
+  const was = manifestScale(entry);
+  if (Math.abs(clamped - was) < 0.005) scaleOverrides.delete(entry.id);
+  else scaleOverrides.set(entry.id, clamped);
+  overrideMeta.set(entry.id, { npc: currentNpcId, slot, was });
+  const rec = attached.get(slot);
+  if (rec) rec.instance.scale.setScalar(clamped);
+  return clamped;
+}
+
+export function resetAccessoryScale(slot) {
+  const entry = currentLoadout.find((e) => e.slot === slot);
+  if (!entry) return null;
+  scaleOverrides.delete(entry.id);
+  const rec = attached.get(slot);
+  if (rec) rec.instance.scale.setScalar(manifestScale(entry));
+  return manifestScale(entry);
+}
+
+/* Every scale the user changed this session, in manifest shape, so the
+ * copied list says exactly what to change and where it came from. */
+export function getScaleOverrides() {
+  return [...scaleOverrides.entries()].map(([id, scale]) => {
+    const meta = overrideMeta.get(id) || {};
+    return { id, npc: meta.npc || null, slot: meta.slot || null, scale, was: meta.was ?? 1 };
+  }).sort((a, b) => String(a.npc).localeCompare(String(b.npc)) || a.id.localeCompare(b.id));
+}
+
 export function showNPC(npc, assetBase, accessories) {
   const canvas = document.getElementById('viewer3dCanvas');
   if (!renderer) initViewer(canvas);
@@ -155,6 +213,9 @@ export function showNPC(npc, assetBase, accessories) {
     const c = rig.children.pop();
     c.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
+  attached.clear();
+  currentNpcId = npc.id;
+  currentLoadout = loadoutFor(npc, accessories);
   rig.rotation.y = 0.5;
   autoSpin = true;
 
@@ -210,12 +271,14 @@ export function showNPC(npc, assetBase, accessories) {
       const off = entry.offset || [0, 0, 0];
       inst.position.set(pos[0] + off[0], pos[1] + off[1], pos[2] + off[2]);
       if (entry.rotation) inst.rotation.set(...entry.rotation);
-      if (typeof entry.scale === 'number') inst.scale.setScalar(entry.scale);
+      // Session rescale override wins over the manifest scale.
+      inst.scale.setScalar(currentScale(entry));
       inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      attached.set(entry.slot, { instance: inst, entry });
       g.add(inst);
     }).catch((err) => console.warn('Showcase: could not load accessory GLB', entry.file, err));
   };
-  for (const entry of loadoutFor(npc, accessories)) attach(entry);
+  for (const entry of currentLoadout) attach(entry);
   rig.add(g);
 }
 
